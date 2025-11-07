@@ -1,33 +1,40 @@
-import { Room, RoomOptions, RoomEvent } from 'livekit-client';
+import { Room, RoomEvent } from 'livekit-client';
+import type { RoomOptions } from 'livekit-client';
 
 export interface LiveKitTokenParams {
   roomName: string;
   participantName: string;
-  apiKey: string;
-  apiSecret: string;
 }
 
 /**
- * Generate a LiveKit access token (mock implementation)
- * In production, this should be done server-side
+ * Generate a LiveKit access token via backend API
  */
 export async function generateLiveKitToken(params: LiveKitTokenParams): Promise<string> {
-  const { roomName, participantName, apiKey, apiSecret } = params;
+  const { roomName, participantName } = params;
   
-  // This is a placeholder - in production, you should generate tokens server-side
-  // For now, we'll use a mock token generation
-  // Note: This is NOT secure and should only be used for development/testing
+  const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL || 'http://localhost:3001';
   
-  const payload = {
-    iss: apiKey,
-    sub: participantName,
-    vid: roomName,
-    exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour expiry
-  };
+  try {
+    const response = await fetch(`${tokenServerUrl}/api/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ roomName, participantName }),
+    });
 
-  // In production, use proper JWT signing with the secret
-  // For now, return a placeholder token
-  return btoa(JSON.stringify(payload));
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to generate token');
+    }
+
+    const data = await response.json();
+    console.log('Token received from server');
+    return data.token;
+  } catch (error) {
+    console.error('Error fetching token from server:', error);
+    throw error;
+  }
 }
 
 /**
@@ -40,13 +47,75 @@ export async function connectToRoom(
 ): Promise<Room> {
   const room = new Room(options);
 
-  try {
-    await room.connect(url, token);
-    return room;
-  } catch (error) {
-    console.error('Failed to connect to LiveKit room:', error);
-    throw error;
-  }
+  return new Promise((resolve, reject) => {
+    let isConnected = false;
+    let connectionTimeout: ReturnType<typeof setTimeout>;
+
+    const disconnectHandler = () => {
+      console.error('Room disconnected');
+      // Only reject if we haven't successfully connected yet
+      if (!isConnected) {
+        room.off(RoomEvent.Connected, connectedHandler);
+        room.off(RoomEvent.Disconnected, disconnectHandler);
+        clearTimeout(connectionTimeout);
+        reject(new Error('Connection lost before establishing'));
+      }
+    };
+
+    const connectedHandler = () => {
+      console.log('Room connected successfully, state:', room.state);
+      isConnected = true;
+      room.off(RoomEvent.Connected, connectedHandler);
+      room.off(RoomEvent.Disconnected, disconnectHandler);
+      clearTimeout(connectionTimeout);
+      // Wait a moment for connection to stabilize
+      setTimeout(() => {
+        if (room.state === 'connected') {
+          resolve(room);
+        } else {
+          reject(new Error(`Connection state is ${room.state}, expected 'connected'`));
+        }
+      }, 100);
+    };
+
+    // Set up event listeners BEFORE connecting
+    room.on(RoomEvent.Connected, connectedHandler);
+    room.on(RoomEvent.Disconnected, disconnectHandler);
+    room.on(RoomEvent.Reconnecting, () => {
+      console.log('Room reconnecting...');
+    });
+
+    // Set connection timeout
+    connectionTimeout = setTimeout(() => {
+      if (!isConnected) {
+        room.off(RoomEvent.Connected, connectedHandler);
+        room.off(RoomEvent.Disconnected, disconnectHandler);
+        room.disconnect();
+        reject(new Error('Connection timeout after 15 seconds'));
+      }
+    }, 15000);
+
+    console.log('Connecting to LiveKit:', url);
+    console.log('Token preview:', token.substring(0, 50) + '...');
+
+    // Start connection
+    room.connect(url, token)
+      .then(() => {
+        console.log('Connect promise resolved, waiting for connected event...');
+        // Don't resolve here - wait for the 'connected' event
+      })
+      .catch((error) => {
+        clearTimeout(connectionTimeout);
+        room.off(RoomEvent.Connected, connectedHandler);
+        room.off(RoomEvent.Disconnected, disconnectHandler);
+        console.error('Connection promise rejected:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        reject(error);
+      });
+  });
 }
 
 /**
@@ -54,18 +123,14 @@ export async function connectToRoom(
  */
 export function getLiveKitConfig() {
   const url = import.meta.env.VITE_LIVEKIT_URL;
-  const apiKey = import.meta.env.VITE_LIVEKIT_API_KEY;
-  const apiSecret = import.meta.env.VITE_LIVEKIT_API_SECRET;
 
-  if (!url || !apiKey) {
-    console.warn('LiveKit environment variables not set. Using placeholder values.');
+  if (!url) {
+    console.warn('LiveKit URL not set. Using placeholder value.');
     return {
       url: url || 'wss://your-livekit-server.livekit.cloud',
-      apiKey: apiKey || 'your-api-key',
-      apiSecret: apiSecret || 'your-api-secret',
     };
   }
 
-  return { url, apiKey, apiSecret };
+  return { url };
 }
 

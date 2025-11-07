@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { User, Group, Salon, Participant } from '../types';
+import type { User, Group, Salon, Participant } from '../types';
 
 interface StoreState {
   users: User[];

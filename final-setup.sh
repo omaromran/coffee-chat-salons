@@ -65,3 +65,4 @@ echo "   Name: $REPO_NAME, Public, then: git push -u origin main"
 echo ""
 echo "✅ Everything else is ready - just needs authentication!"
 
+

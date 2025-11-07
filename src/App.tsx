@@ -4,6 +4,7 @@ import SalonLobbyPage from './pages/SalonLobbyPage';
 import SalonRoomPage from './pages/SalonRoomPage';
 
 function App() {
+  console.log('App component rendering');
   return (
     <Router>
       <Routes>

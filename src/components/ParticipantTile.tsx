@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Participant, TrackPublication, Track } from 'livekit-client';
+import type { Participant } from 'livekit-client';
+import type { Track } from 'livekit-client';
 
 interface ParticipantTileProps {
   participant: Participant;
@@ -16,33 +17,54 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   useEffect(() => {
     const updateTracks = () => {
-      // Get video track
-      const videoPub = Array.from(participant.videoTrackPublications.values())[0];
+      // Get video track - check both published and subscribed tracks
+      const videoPubs = Array.from(participant.videoTrackPublications.values());
+      const videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
       const video = videoPub?.track;
       setVideoTrack(video || null);
-      setIsVideoEnabled(videoPub?.isMuted === false && video !== null);
+      setIsVideoEnabled(videoPub ? !videoPub.isMuted && video !== null : false);
 
-      // Get audio track
-      const audioPub = Array.from(participant.audioTrackPublications.values())[0];
+      // Get audio track - check both published and subscribed tracks
+      const audioPubs = Array.from(participant.audioTrackPublications.values());
+      const audioPub = audioPubs.find(pub => pub.track) || audioPubs[0];
       const audio = audioPub?.track;
       setAudioTrack(audio || null);
-      setIsAudioEnabled(audioPub?.isMuted === false && audio !== null);
+      setIsAudioEnabled(audioPub ? !audioPub.isMuted && audio !== null : false);
+      
+      console.log('Track update:', {
+        participant: participant.identity,
+        videoTrack: video ? 'present' : 'missing',
+        audioTrack: audio ? 'present' : 'missing',
+        videoEnabled: !videoPub?.isMuted,
+        audioEnabled: !audioPub?.isMuted,
+      });
     };
 
     updateTracks();
 
+    // Listen for track events
     participant.on('trackSubscribed', updateTracks);
     participant.on('trackUnsubscribed', updateTracks);
     participant.on('trackMuted', updateTracks);
     participant.on('trackUnmuted', updateTracks);
+    
+    // For local participant, also listen for published tracks
+    if (isLocal) {
+      participant.on('trackPublished', updateTracks);
+      participant.on('trackUnpublished', updateTracks);
+    }
 
     return () => {
       participant.off('trackSubscribed', updateTracks);
       participant.off('trackUnsubscribed', updateTracks);
       participant.off('trackMuted', updateTracks);
       participant.off('trackUnmuted', updateTracks);
+      if (isLocal) {
+        participant.off('trackPublished', updateTracks);
+        participant.off('trackUnpublished', updateTracks);
+      }
     };
-  }, [participant]);
+  }, [participant, isLocal]);
 
   useEffect(() => {
     if (videoTrack && videoRef.current) {

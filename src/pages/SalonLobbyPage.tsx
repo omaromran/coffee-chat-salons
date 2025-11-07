@@ -1,14 +1,59 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export default function SalonLobbyPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { getSalonById, getSalonParticipants, getGroupById } = useStore();
+  const [participantCount, setParticipantCount] = useState(0);
 
   const salon = id ? getSalonById(id) : null;
   const group = salon ? getGroupById(salon.groupId) : null;
   const participants = salon ? getSalonParticipants(salon.id) : [];
+
+  // Fetch actual participant count from LiveKit room
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchParticipantCount = async () => {
+      const roomName = `salon-${id}`;
+      const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL || 'http://localhost:3001';
+
+      try {
+        const response = await fetch(`${tokenServerUrl}/api/room/${roomName}/participants`);
+        
+        if (!response.ok) {
+          console.error('Failed to fetch participant count');
+          return;
+        }
+
+        const data = await response.json();
+        const actualCount = data.participantCount || 0;
+        
+        setParticipantCount(actualCount);
+        
+        // Also update the salon in the store
+        const currentSalon = useStore.getState().getSalonById(id);
+        if (currentSalon && currentSalon.participantCount !== actualCount) {
+          useStore.getState().updateSalon(id, {
+            participantCount: actualCount,
+            lastActivityAt: Date.now(),
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching participant count:', error);
+      }
+    };
+
+    // Fetch immediately
+    fetchParticipantCount();
+
+    // Refresh every 3 seconds
+    const interval = setInterval(fetchParticipantCount, 3000);
+
+    return () => clearInterval(interval);
+  }, [id]); // Only depend on id
 
   if (!salon || !group) {
     return (
@@ -26,7 +71,29 @@ export default function SalonLobbyPage() {
     );
   }
 
-  const handleEnterSalon = () => {
+  const handleEnterSalon = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Request microphone permission when user clicks (user interaction required)
+    // This allows browser to remember permission for future use
+    try {
+      console.log('Requesting microphone permission...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('Microphone permission granted');
+      // Stop the temporary stream - we'll get a new one in LiveKit
+      stream.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped temporary audio track');
+      });
+    } catch (error) {
+      console.warn('Microphone permission not granted:', error);
+      // Continue anyway - user can enable manually in the room
+    }
+    
+    // Small delay to ensure permission is processed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Navigate to salon room
     navigate(`/salons/${salon.id}`);
   };
 
@@ -61,20 +128,22 @@ export default function SalonLobbyPage() {
       <div className="flex flex-col items-center justify-center px-4 py-12 min-h-[calc(100vh-200px)]">
         {/* Participant Avatars */}
         <div className="flex items-center justify-center gap-4 mb-8">
-          {participants.slice(0, 4).map((participant, index) => (
-            <div
-              key={participant.id}
-              className={`relative ${index > 0 ? '-ml-4' : ''}`}
-              style={{ zIndex: participants.length - index }}
-            >
-              <div className="w-16 h-16 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center shadow-md">
-                <span className="text-xl font-semibold text-gray-700">
-                  {participant.userName.charAt(0)}
-                </span>
+          {participantCount > 0 ? (
+            // Show placeholder avatars based on actual count
+            Array.from({ length: Math.min(participantCount, 4) }).map((_, index) => (
+              <div
+                key={index}
+                className={`relative ${index > 0 ? '-ml-4' : ''}`}
+                style={{ zIndex: participantCount - index }}
+              >
+                <div className="w-16 h-16 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center shadow-md">
+                  <span className="text-xl font-semibold text-gray-700">
+                    {participants[index]?.userName.charAt(0) || '?'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
-          {participants.length === 0 && (
+            ))
+          ) : (
             <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-gray-200 flex items-center justify-center">
               <span className="text-sm text-gray-400">Empty</span>
             </div>
@@ -88,8 +157,8 @@ export default function SalonLobbyPage() {
             <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
           </svg>
           <p className="text-lg text-gray-700">
-            {participants.length > 0
-              ? `${participants.length} people chatting...`
+            {participantCount > 0
+              ? `${participantCount} people chatting...`
               : 'No one is chatting yet'}
           </p>
         </div>
@@ -110,4 +179,5 @@ export default function SalonLobbyPage() {
     </div>
   );
 }
+
 
