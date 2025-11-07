@@ -16,12 +16,19 @@ export default function SalonLobbyPage() {
   useEffect(() => {
     if (!id) return;
 
-    const fetchParticipantCount = async () => {
-      const roomName = `salon-${id}`;
-      const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL || 'http://localhost:3001';
+          const fetchParticipantCount = async () => {
+            const roomName = `salon-${id}`;
+            const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL || 'http://localhost:3001';
+            
+            // For Firebase Functions, use query parameter
+            // For local dev, use path parameter
+            const isFirebase = tokenServerUrl.includes('cloudfunctions.net');
+            const endpoint = isFirebase 
+              ? `${tokenServerUrl}/getRoomParticipants?roomName=${encodeURIComponent(roomName)}`
+              : `${tokenServerUrl}/api/room/${roomName}/participants`;
 
-      try {
-        const response = await fetch(`${tokenServerUrl}/api/room/${roomName}/participants`);
+            try {
+              const response = await fetch(endpoint);
         
         if (!response.ok) {
           console.error('Failed to fetch participant count');

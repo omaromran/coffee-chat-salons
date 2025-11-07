@@ -16,9 +16,14 @@ export default function SalonListPage() {
 
       const roomNames = activeSalons.map(salon => `salon-${salon.id}`);
       const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL || 'http://localhost:3001';
+      
+      // For Firebase Functions, the endpoint is /getParticipantCounts
+      // For local dev, it's /api/rooms/participant-counts
+      const isFirebase = tokenServerUrl.includes('cloudfunctions.net');
+      const endpoint = isFirebase ? '/getParticipantCounts' : '/api/rooms/participant-counts';
 
       try {
-        const response = await fetch(`${tokenServerUrl}/api/rooms/participant-counts`, {
+        const response = await fetch(`${tokenServerUrl}${endpoint}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

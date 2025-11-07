@@ -15,7 +15,12 @@ export async function generateLiveKitToken(params: LiveKitTokenParams): Promise<
   const tokenServerUrl = import.meta.env.VITE_TOKEN_SERVER_URL || 'http://localhost:3001';
   
   try {
-    const response = await fetch(`${tokenServerUrl}/api/token`, {
+    // For Firebase Functions, the endpoint is /generateToken
+    // For local dev, it's /api/token
+    const isFirebase = tokenServerUrl.includes('cloudfunctions.net');
+    const endpoint = isFirebase ? '/generateToken' : '/api/token';
+    
+    const response = await fetch(`${tokenServerUrl}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
