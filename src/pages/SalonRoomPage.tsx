@@ -522,16 +522,29 @@ export default function SalonRoomPage() {
         // Wait for track to be published and verify
         await new Promise<void>((resolve) => {
           let attempts = 0;
-          const maxAttempts = 20;
+          const maxAttempts = 30;
           
           const checkVideo = () => {
             attempts++;
             const videoPubs = Array.from(room.localParticipant.videoTrackPublications.values());
             const videoPub = videoPubs.find(pub => pub.track);
             
+            console.log('Video toggle check:', {
+              attempts,
+              videoPubsCount: videoPubs.length,
+              hasPub: !!videoPub,
+              hasTrack: !!videoPub?.track,
+              isMuted: videoPub?.isMuted,
+              trackSid: videoPub?.trackSid,
+            });
+            
             if (videoPub && videoPub.track) {
               const isActuallyEnabled = !videoPub.isMuted && !!videoPub.track;
               setIsVideoEnabled(isActuallyEnabled);
+              
+              // Force participants list update to trigger re-render
+              setParticipants([room.localParticipant, ...room.remoteParticipants.values()]);
+              
               console.log('Video enabled check:', {
                 attempts,
                 hasTrack: !!videoPub.track,
@@ -540,6 +553,10 @@ export default function SalonRoomPage() {
               });
               
               if (isActuallyEnabled || attempts >= maxAttempts) {
+                // One more update after track is confirmed
+                setTimeout(() => {
+                  setParticipants([room.localParticipant, ...room.remoteParticipants.values()]);
+                }, 200);
                 resolve();
               } else {
                 setTimeout(checkVideo, 100);
@@ -557,6 +574,8 @@ export default function SalonRoomPage() {
       } else {
         await room.localParticipant.setCameraEnabled(false);
         setIsVideoEnabled(false);
+        // Update participants list after disabling
+        setParticipants([room.localParticipant, ...room.remoteParticipants.values()]);
       }
     } catch (error) {
       console.error('Error toggling video:', error);
@@ -564,6 +583,8 @@ export default function SalonRoomPage() {
       const videoTracks = Array.from(room.localParticipant.videoTrackPublications.values());
       const hasActiveVideo = videoTracks.some(pub => pub.track && !pub.isMuted);
       setIsVideoEnabled(hasActiveVideo);
+      // Force update participants list
+      setParticipants([room.localParticipant, ...room.remoteParticipants.values()]);
     }
   };
 
