@@ -21,13 +21,35 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
       // For remote participants, check subscribed tracks
       const videoPubs = Array.from(participant.videoTrackPublications.values());
       
+      console.log('updateTracks called:', {
+        participant: participant.identity,
+        isLocal,
+        videoPubsCount: videoPubs.length,
+        allPubs: videoPubs.map(p => ({
+          hasTrack: !!p.track,
+          isMuted: p.isMuted,
+          trackSid: p.trackSid,
+          kind: p.kind,
+          source: p.source,
+        })),
+      });
+      
       // For local participant, get any published track (even if muted, we still want to show it)
       // For remote, prioritize unmuted tracks
       let videoPub: typeof videoPubs[0] | undefined;
       
       if (isLocal) {
-        // For local, get any track that exists - we'll show it even if muted
-        videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
+        // For local, get ANY track that exists - check all publications
+        videoPub = videoPubs.find(pub => pub.track);
+        // If no track found, try getting the first publication (might have track later)
+        if (!videoPub && videoPubs.length > 0) {
+          videoPub = videoPubs[0];
+        }
+        console.log('Local video track search:', {
+          foundPub: !!videoPub,
+          hasTrack: !!videoPub?.track,
+          trackSid: videoPub?.trackSid,
+        });
       } else {
         // For remote, prioritize unmuted tracks
         videoPub = videoPubs.find(pub => pub.track && !pub.isMuted);
@@ -63,7 +85,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
       setAudioTrack(audio || null);
       setIsAudioEnabled(audioPub ? !audioPub.isMuted && audio !== null : false);
       
-      console.log('Track update:', {
+      console.log('Track update result:', {
         participant: participant.identity,
         isLocal,
         videoTrack: video ? 'present' : 'missing',
@@ -74,7 +96,6 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         audioMuted: audioPub?.isMuted,
         videoTrackSid: videoPub?.trackSid,
         videoPubsCount: videoPubs.length,
-        allVideoPubs: videoPubs.map(p => ({ hasTrack: !!p.track, isMuted: p.isMuted, trackSid: p.trackSid })),
       });
     };
 
@@ -168,20 +189,20 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   return (
     <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-      {/* Video Element - Always render for local participant to ensure it's ready */}
-      {isLocal || videoTrack ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className={`w-full h-full object-cover ${(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) ? '' : 'hidden'}`}
-        />
-      ) : null}
+      {/* Video Element - Always render for local participant */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        className={`w-full h-full object-cover ${
+          (isLocal ? videoTrack : (isVideoEnabled && videoTrack)) ? '' : 'hidden'
+        }`}
+      />
       
       {/* Placeholder when no video */}
       {!(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) && (
-        <div className="w-full h-full flex items-center justify-center bg-gray-700">
+        <div className="w-full h-full flex items-center justify-center bg-gray-700 absolute inset-0">
           <div className="text-center">
             <div className="w-20 h-20 rounded-full bg-teal/20 flex items-center justify-center mx-auto mb-2">
               <span className="text-2xl font-semibold text-teal">{initials}</span>
