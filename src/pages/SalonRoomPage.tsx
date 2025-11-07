@@ -398,7 +398,17 @@ export default function SalonRoomPage() {
             setIsAudioEnabled(isEnabled);
             console.log('Audio unmuted, state updated:', isEnabled);
           } else if (publication.kind === 'video') {
-            setIsVideoEnabled(true);
+            // Double-check video track state
+            const videoPubs = Array.from(newRoom.localParticipant.videoTrackPublications.values());
+            const videoPub = videoPubs.find(pub => pub.track);
+            const isEnabled = videoPub ? !videoPub.isMuted && !!videoPub.track : false;
+            setIsVideoEnabled(isEnabled);
+            console.log('Video unmuted, state updated:', isEnabled);
+            // Force participants list update to refresh video display
+            setParticipants((prev) => {
+              const updated = [newRoom.localParticipant, ...newRoom.remoteParticipants.values()];
+              return updated;
+            });
           }
         });
 
