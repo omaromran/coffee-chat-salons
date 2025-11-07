@@ -17,36 +17,60 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   useEffect(() => {
     const updateTracks = () => {
-      // Get video track - check subscribed tracks first (for remote participants)
-      // then published tracks (for local participant)
+      // For local participant, check published tracks
+      // For remote participants, check subscribed tracks
       const videoPubs = Array.from(participant.videoTrackPublications.values());
-      let videoPub = videoPubs.find(pub => pub.track && !pub.isMuted);
+      
+      // For local participant, prioritize tracks that are actually published
+      // For remote, prioritize tracks that are subscribed
+      let videoPub = videoPubs.find(pub => {
+        if (isLocal) {
+          // For local, check if track exists and is published
+          return pub.track && pub.trackSid;
+        } else {
+          // For remote, check if track exists and is subscribed
+          return pub.track && !pub.isMuted;
+        }
+      });
+      
+      // Fallback: get any available track
       if (!videoPub) {
         videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
       }
+      
       const video = videoPub?.track;
       setVideoTrack(video || null);
       setIsVideoEnabled(videoPub ? !videoPub.isMuted && video !== null : false);
 
-      // Get audio track - check subscribed tracks first (for remote participants)
-      // then published tracks (for local participant)
+      // Audio track handling
       const audioPubs = Array.from(participant.audioTrackPublications.values());
-      let audioPub = audioPubs.find(pub => pub.track && !pub.isMuted);
+      let audioPub = audioPubs.find(pub => {
+        if (isLocal) {
+          return pub.track && pub.trackSid;
+        } else {
+          return pub.track && !pub.isMuted;
+        }
+      });
+      
       if (!audioPub) {
         audioPub = audioPubs.find(pub => pub.track) || audioPubs[0];
       }
+      
       const audio = audioPub?.track;
       setAudioTrack(audio || null);
       setIsAudioEnabled(audioPub ? !audioPub.isMuted && audio !== null : false);
       
       console.log('Track update:', {
         participant: participant.identity,
+        isLocal,
         videoTrack: video ? 'present' : 'missing',
         audioTrack: audio ? 'present' : 'missing',
         videoEnabled: videoPub ? !videoPub.isMuted : false,
         audioEnabled: audioPub ? !audioPub.isMuted : false,
         videoMuted: videoPub?.isMuted,
         audioMuted: audioPub?.isMuted,
+        videoTrackSid: videoPub?.trackSid,
+        videoPubsCount: videoPubs.length,
       });
     };
 
@@ -79,11 +103,29 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
   useEffect(() => {
     if (videoTrack && videoRef.current) {
       const videoElement = videoRef.current;
+      console.log('Attaching video track:', {
+        participant: participant.identity,
+        isLocal,
+        trackSid: videoTrack.sid,
+        elementReady: !!videoElement,
+      });
+      
       // Attach the new track - LiveKit's attach method handles cleanup
       videoTrack.attach(videoElement);
+      
+      // Ensure video plays
+      videoElement.play().catch(err => {
+        console.error('Error playing video:', err);
+      });
+      
       return () => {
         // Only detach if this is still the current track and element
         if (videoTrack && videoRef.current === videoElement) {
+          console.log('Detaching video track:', {
+            participant: participant.identity,
+            isLocal,
+            trackSid: videoTrack.sid,
+          });
           videoTrack.detach();
         }
       };
@@ -95,7 +137,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         videoElement.srcObject = null;
       }
     }
-  }, [videoTrack]);
+  }, [videoTrack, participant.identity, isLocal]);
 
   useEffect(() => {
     if (audioTrack && audioRef.current) {

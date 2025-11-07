@@ -334,7 +334,25 @@ export default function SalonRoomPage() {
               setIsAudioEnabled(false);
             }
           } else if (publication.kind === 'video') {
-            setIsVideoEnabled(!publication.isMuted && !!publication.track);
+            // Wait a moment for video track to be ready
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Get the actual publication state
+            const videoPubs = Array.from(newRoom.localParticipant.videoTrackPublications.values());
+            const videoPub = videoPubs.find(pub => pub.track);
+            
+            if (videoPub && videoPub.track) {
+              const isEnabled = !videoPub.isMuted && !!videoPub.track;
+              setIsVideoEnabled(isEnabled);
+              console.log('Video track published:', {
+                hasTrack: !!videoPub.track,
+                isMuted: videoPub.isMuted,
+                enabled: isEnabled,
+                trackSid: videoPub.trackSid,
+              });
+            } else {
+              setIsVideoEnabled(false);
+            }
           }
         });
 
@@ -491,12 +509,55 @@ export default function SalonRoomPage() {
     if (!room) return;
 
     const newState = !isVideoEnabled;
-    if (newState) {
-      await room.localParticipant.setCameraEnabled(true);
-    } else {
-      await room.localParticipant.setCameraEnabled(false);
+    try {
+      if (newState) {
+        await room.localParticipant.setCameraEnabled(true);
+        // Wait for track to be published and verify
+        await new Promise<void>((resolve) => {
+          let attempts = 0;
+          const maxAttempts = 20;
+          
+          const checkVideo = () => {
+            attempts++;
+            const videoPubs = Array.from(room.localParticipant.videoTrackPublications.values());
+            const videoPub = videoPubs.find(pub => pub.track);
+            
+            if (videoPub && videoPub.track) {
+              const isActuallyEnabled = !videoPub.isMuted && !!videoPub.track;
+              setIsVideoEnabled(isActuallyEnabled);
+              console.log('Video enabled check:', {
+                attempts,
+                hasTrack: !!videoPub.track,
+                isMuted: videoPub.isMuted,
+                enabled: isActuallyEnabled,
+              });
+              
+              if (isActuallyEnabled || attempts >= maxAttempts) {
+                resolve();
+              } else {
+                setTimeout(checkVideo, 100);
+              }
+            } else if (attempts >= maxAttempts) {
+              setIsVideoEnabled(false);
+              resolve();
+            } else {
+              setTimeout(checkVideo, 100);
+            }
+          };
+          
+          setTimeout(checkVideo, 200);
+        });
+      } else {
+        await room.localParticipant.setCameraEnabled(false);
+        setIsVideoEnabled(false);
+      }
+    } catch (error) {
+      console.error('Error toggling video:', error);
+      // Update UI state based on actual state
+      const videoTracks = Array.from(room.localParticipant.videoTrackPublications.values());
+      const hasActiveVideo = videoTracks.some(pub => pub.track && !pub.isMuted);
+      setIsVideoEnabled(hasActiveVideo);
     }
-    setIsVideoEnabled(newState);
   };
 
   const handleLeave = async () => {
