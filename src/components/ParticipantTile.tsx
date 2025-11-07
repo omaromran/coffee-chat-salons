@@ -91,7 +91,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
     };
   }, [participant, isLocal]);
 
-  // Attach video track to element
+  // Attach video track to element - check directly from participant
   useEffect(() => {
     const currentVideoTrack = getVideoTrack();
     
@@ -135,7 +135,9 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         if (videoRef.current === videoElement) {
           try {
             currentVideoTrack.detach();
-          } catch (e) {}
+          } catch (e) {
+            // Ignore detach errors
+          }
           if (videoElement.srcObject) {
             videoElement.srcObject = null;
           }
@@ -144,12 +146,17 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
     } else if (videoRef.current && !currentVideoTrack) {
       videoRef.current.srcObject = null;
     }
-  }, [participant, isLocal]); // Re-run when participant changes
+    
+    // Return void if no cleanup needed
+    return undefined;
+  }, [participant, isLocal, getVideoTrack]); // Re-run when participant changes
 
   useEffect(() => {
     if (audioTrack && audioRef.current) {
       audioTrack.attach(audioRef.current);
-      return () => audioTrack.detach();
+      return () => {
+        audioTrack.detach();
+      };
     }
   }, [audioTrack]);
 
