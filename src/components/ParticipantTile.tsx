@@ -93,62 +93,98 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   // Attach video track to element - check directly from participant
   useEffect(() => {
-    const currentVideoTrack = getVideoTrack();
-    
-    if (currentVideoTrack && videoRef.current) {
-      const videoElement = videoRef.current;
+    // Force check on every render for local participants
+    const checkAndAttach = () => {
+      const currentVideoTrack = getVideoTrack();
       
-      console.log('ATTACHING VIDEO:', {
-        isLocal,
-        trackSid: currentVideoTrack.sid,
-        hasMediaStreamTrack: !!currentVideoTrack.mediaStreamTrack,
-      });
-
-      // For local tracks, use MediaStream directly
-      if (isLocal && currentVideoTrack.mediaStreamTrack) {
-        const stream = new MediaStream([currentVideoTrack.mediaStreamTrack]);
-        videoElement.srcObject = stream;
-        console.log('Local video srcObject set');
+      if (currentVideoTrack && videoRef.current) {
+        const videoElement = videoRef.current;
         
-        // Also try LiveKit attach
-        try {
-          currentVideoTrack.attach(videoElement);
-        } catch (e) {
-          console.warn('LiveKit attach failed:', e);
-        }
-      } else {
-        // Remote tracks use LiveKit attach
-        currentVideoTrack.attach(videoElement);
-      }
+        console.log('ATTACHING VIDEO:', {
+          isLocal,
+          trackSid: currentVideoTrack.sid,
+          hasMediaStreamTrack: !!currentVideoTrack.mediaStreamTrack,
+          elementReady: !!videoElement,
+        });
 
-      // Force play
-      const play = () => {
-        if (videoElement && videoRef.current === videoElement) {
-          videoElement.play().catch(e => console.error('Play error:', e));
-        }
-      };
-      play();
-      setTimeout(play, 100);
-      setTimeout(play, 500);
-
-      return () => {
-        if (videoRef.current === videoElement) {
+        // For local tracks, use MediaStream directly
+        if (isLocal && currentVideoTrack.mediaStreamTrack) {
           try {
-            currentVideoTrack.detach();
-          } catch (e) {
-            // Ignore detach errors
+            const stream = new MediaStream([currentVideoTrack.mediaStreamTrack]);
+            videoElement.srcObject = stream;
+            console.log('✅ Local video srcObject set successfully');
+            
+            // Also try LiveKit attach
+            try {
+              currentVideoTrack.attach(videoElement);
+              console.log('✅ LiveKit attach also successful');
+            } catch (e) {
+              console.warn('LiveKit attach failed (but srcObject is set):', e);
+            }
+          } catch (streamErr) {
+            console.error('Failed to create MediaStream:', streamErr);
+            // Fallback to LiveKit attach
+            try {
+              currentVideoTrack.attach(videoElement);
+            } catch (e) {
+              console.error('Both methods failed:', e);
+            }
           }
-          if (videoElement.srcObject) {
-            videoElement.srcObject = null;
-          }
+        } else {
+          // Remote tracks use LiveKit attach
+          currentVideoTrack.attach(videoElement);
         }
-      };
-    } else if (videoRef.current && !currentVideoTrack) {
-      videoRef.current.srcObject = null;
+
+        // Force play multiple times
+        const play = () => {
+          if (videoElement && videoRef.current === videoElement) {
+            videoElement.play()
+              .then(() => {
+                console.log('✅ Video playing successfully');
+              })
+              .catch(e => {
+                console.error('❌ Play error:', e);
+              });
+          }
+        };
+        
+        // Try playing immediately and with delays
+        play();
+        setTimeout(play, 50);
+        setTimeout(play, 100);
+        setTimeout(play, 300);
+        setTimeout(play, 500);
+        setTimeout(play, 1000);
+      }
+    };
+
+    // Check immediately
+    checkAndAttach();
+
+    // For local participants, check periodically to catch track when it becomes available
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (isLocal) {
+      interval = setInterval(() => {
+        checkAndAttach();
+      }, 500);
     }
-    
-    // Return void if no cleanup needed
-    return undefined;
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      const currentVideoTrack = getVideoTrack();
+      if (currentVideoTrack && videoRef.current) {
+        try {
+          currentVideoTrack.detach();
+        } catch (e) {
+          // Ignore detach errors
+        }
+        if (videoRef.current.srcObject) {
+          videoRef.current.srcObject = null;
+        }
+      }
+    };
   }, [participant, isLocal]); // Re-run when participant changes
 
   useEffect(() => {
@@ -163,23 +199,37 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
   const participantName = participant.name || participant.identity || 'Unknown';
   const initials = participantName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   
-  // For local, show video if track exists (check directly, not state)
+  // For local, ALWAYS check directly from participant - don't rely on state
   const currentVideoTrack = getVideoTrack();
+  // For local participants, ALWAYS show video element if track exists
   const showVideo = isLocal ? !!currentVideoTrack : (isVideoEnabled && !!videoTrack);
+
+  console.log('RENDER CHECK:', {
+    participant: participant.identity,
+    isLocal,
+    currentVideoTrack: !!currentVideoTrack,
+    videoTrackState: !!videoTrack,
+    isVideoEnabled,
+    showVideo,
+  });
 
   return (
     <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+      {/* ALWAYS render video element for local participants */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={isLocal}
         className="w-full h-full object-cover"
-        style={{ display: showVideo ? 'block' : 'none' }}
+        style={{ 
+          display: showVideo ? 'block' : 'none',
+          zIndex: showVideo ? 1 : 0,
+        }}
       />
       
       {!showVideo && (
-        <div className="w-full h-full flex items-center justify-center bg-gray-700 absolute inset-0">
+        <div className="w-full h-full flex items-center justify-center bg-gray-700 absolute inset-0" style={{ zIndex: 0 }}>
           <div className="text-center">
             <div className="w-20 h-20 rounded-full bg-teal/20 flex items-center justify-center mx-auto mb-2">
               <span className="text-2xl font-semibold text-teal">{initials}</span>
