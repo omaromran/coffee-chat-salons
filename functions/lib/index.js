@@ -32,12 +32,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getParticipantCounts = exports.getRoomParticipants = exports.generateToken = void 0;
 const functions = __importStar(require("firebase-functions"));
-const cors = __importStar(require("cors"));
+const cors_1 = __importDefault(require("cors"));
 const livekit_server_sdk_1 = require("livekit-server-sdk");
-const corsHandler = cors({ origin: true });
+const corsHandler = (0, cors_1.default)({ origin: true });
 // Initialize LiveKit Room Service Client
 // Use environment variables (Firebase Functions v2) or config (v1)
 const livekitUrl = process.env.LIVEKIT_URL || functions.config().livekit?.url || '';
@@ -47,107 +50,135 @@ const httpUrl = livekitUrl.replace('wss://', 'https://').replace('ws://', 'http:
 const roomService = new livekit_server_sdk_1.RoomServiceClient(httpUrl, apiKey, apiSecret);
 // Token generation endpoint
 exports.generateToken = functions.https.onRequest(async (req, res) => {
-    return corsHandler(req, res, async () => {
-        if (req.method !== 'POST') {
-            return res.status(405).json({ error: 'Method not allowed' });
-        }
-        try {
-            const { roomName, participantName } = req.body;
-            if (!roomName || !participantName) {
-                return res.status(400).json({ error: 'roomName and participantName are required' });
+    return new Promise((resolve) => {
+        corsHandler(req, res, async () => {
+            if (req.method !== 'POST') {
+                res.status(405).json({ error: 'Method not allowed' });
+                resolve();
+                return;
             }
-            if (!apiKey || !apiSecret) {
-                return res.status(500).json({ error: 'LiveKit credentials not configured' });
+            try {
+                const { roomName, participantName } = req.body;
+                if (!roomName || !participantName) {
+                    res.status(400).json({ error: 'roomName and participantName are required' });
+                    resolve();
+                    return;
+                }
+                if (!apiKey || !apiSecret) {
+                    res.status(500).json({ error: 'LiveKit credentials not configured' });
+                    resolve();
+                    return;
+                }
+                // Generate unique participant identity
+                const participantIdentity = participantName.replace(/\s+/g, '-').toLowerCase() + '-' + Date.now();
+                const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
+                    identity: participantIdentity,
+                    name: participantName,
+                });
+                at.addGrant({
+                    room: roomName,
+                    roomJoin: true,
+                    canPublish: true,
+                    canSubscribe: true,
+                    canPublishData: true,
+                    canUpdateOwnMetadata: true,
+                });
+                const token = await at.toJwt();
+                res.json({ token });
+                resolve();
             }
-            // Generate unique participant identity
-            const participantIdentity = participantName.replace(/\s+/g, '-').toLowerCase() + '-' + Date.now();
-            const at = new livekit_server_sdk_1.AccessToken(apiKey, apiSecret, {
-                identity: participantIdentity,
-                name: participantName,
-            });
-            at.addGrant({
-                room: roomName,
-                roomJoin: true,
-                canPublish: true,
-                canSubscribe: true,
-                canPublishData: true,
-                canUpdateOwnMetadata: true,
-            });
-            const token = await at.toJwt();
-            res.json({ token });
-        }
-        catch (error) {
-            console.error('Error generating token:', error);
-            res.status(500).json({ error: 'Failed to generate token' });
-        }
+            catch (error) {
+                console.error('Error generating token:', error);
+                res.status(500).json({ error: 'Failed to generate token' });
+                resolve();
+            }
+        });
     });
 });
 // Get room participant count endpoint
 exports.getRoomParticipants = functions.https.onRequest(async (req, res) => {
-    return corsHandler(req, res, async () => {
-        if (req.method !== 'GET') {
-            return res.status(405).json({ error: 'Method not allowed' });
-        }
-        try {
-            // Extract roomName from query parameter or path
-            const roomName = req.query.roomName || req.path.split('/').pop();
-            if (!roomName) {
-                return res.status(400).json({ error: 'roomName is required' });
+    return new Promise((resolve) => {
+        corsHandler(req, res, async () => {
+            if (req.method !== 'GET') {
+                res.status(405).json({ error: 'Method not allowed' });
+                resolve();
+                return;
             }
-            // List rooms to find the specific room
-            const rooms = await roomService.listRooms([roomName]);
-            const room = rooms.find(r => r.name === roomName);
-            if (!room) {
-                return res.json({ participantCount: 0 });
+            try {
+                // Extract roomName from query parameter or path
+                const roomName = req.query.roomName || req.path.split('/').pop();
+                if (!roomName) {
+                    res.status(400).json({ error: 'roomName is required' });
+                    resolve();
+                    return;
+                }
+                // List rooms to find the specific room
+                const rooms = await roomService.listRooms([roomName]);
+                const room = rooms.find(r => r.name === roomName);
+                if (!room) {
+                    res.json({ participantCount: 0 });
+                    resolve();
+                    return;
+                }
+                // Get participants in the room
+                const participants = await roomService.listParticipants(roomName);
+                const participantCount = participants.length;
+                res.json({ participantCount });
+                resolve();
             }
-            // Get participants in the room
-            const participants = await roomService.listParticipants(roomName);
-            const participantCount = participants.length;
-            res.json({ participantCount });
-        }
-        catch (error) {
-            console.error('Error getting room participants:', error);
-            res.status(500).json({ error: 'Failed to get room participants' });
-        }
+            catch (error) {
+                console.error('Error getting room participants:', error);
+                res.status(500).json({ error: 'Failed to get room participants' });
+                resolve();
+            }
+        });
     });
 });
 // Batch get participant counts for multiple rooms
 exports.getParticipantCounts = functions.https.onRequest(async (req, res) => {
-    return corsHandler(req, res, async () => {
-        if (req.method !== 'POST') {
-            return res.status(405).json({ error: 'Method not allowed' });
-        }
-        try {
-            const { roomNames } = req.body;
-            if (!Array.isArray(roomNames)) {
-                return res.status(400).json({ error: 'roomNames must be an array' });
+    return new Promise((resolve) => {
+        corsHandler(req, res, async () => {
+            if (req.method !== 'POST') {
+                res.status(405).json({ error: 'Method not allowed' });
+                resolve();
+                return;
             }
-            const counts = {};
-            // Get all rooms
-            const rooms = await roomService.listRooms(roomNames);
-            // For each requested room, get participant count
-            for (const roomName of roomNames) {
-                try {
-                    const room = rooms.find(r => r.name === roomName);
-                    if (room) {
-                        const participants = await roomService.listParticipants(roomName);
-                        counts[roomName] = participants.length;
+            try {
+                const { roomNames } = req.body;
+                if (!Array.isArray(roomNames)) {
+                    res.status(400).json({ error: 'roomNames must be an array' });
+                    resolve();
+                    return;
+                }
+                const counts = {};
+                // Get all rooms
+                const rooms = await roomService.listRooms(roomNames);
+                // For each requested room, get participant count
+                for (const roomName of roomNames) {
+                    try {
+                        const room = rooms.find(r => r.name === roomName);
+                        if (room) {
+                            const participants = await roomService.listParticipants(roomName);
+                            counts[roomName] = participants.length;
+                        }
+                        else {
+                            counts[roomName] = 0;
+                        }
                     }
-                    else {
+                    catch (error) {
+                        console.error(`Error getting participants for room ${roomName}:`, error);
                         counts[roomName] = 0;
                     }
                 }
-                catch (error) {
-                    console.error(`Error getting participants for room ${roomName}:`, error);
-                    counts[roomName] = 0;
-                }
+                res.json({ counts });
+                resolve();
             }
-            res.json({ counts });
-        }
-        catch (error) {
-            console.error('Error getting room participant counts:', error);
-            res.status(500).json({ error: 'Failed to get room participant counts' });
-        }
+            catch (error) {
+                console.error('Error getting room participant counts:', error);
+                res.status(500).json({ error: 'Failed to get room participant counts' });
+                resolve();
+            }
+        });
     });
 });
 //# sourceMappingURL=index.js.map
