@@ -341,15 +341,37 @@ export default function SalonRoomPage() {
             const videoPubs = Array.from(newRoom.localParticipant.videoTrackPublications.values());
             const videoPub = videoPubs.find(pub => pub.track);
             
+            console.log('Video track published event:', {
+              publicationTrackSid: publication.trackSid,
+              hasTrack: !!videoPub?.track,
+              isMuted: videoPub?.isMuted,
+              allVideoPubs: videoPubs.map(p => ({
+                hasTrack: !!p.track,
+                isMuted: p.isMuted,
+                trackSid: p.trackSid,
+              })),
+            });
+            
             if (videoPub && videoPub.track) {
-              const isEnabled = !videoPub.isMuted && !!videoPub.track;
+              // For local video, show it if track exists (regardless of muted state)
+              const isEnabled = !!videoPub.track; // Don't check isMuted for local
               setIsVideoEnabled(isEnabled);
-              console.log('Video track published:', {
-                hasTrack: !!videoPub.track,
-                isMuted: videoPub.isMuted,
-                enabled: isEnabled,
-                trackSid: videoPub.trackSid,
-              });
+              console.log('Video track published - setting isVideoEnabled to:', isEnabled);
+              
+              // Force participants list update to trigger re-render
+              setParticipants([newRoom.localParticipant, ...newRoom.remoteParticipants.values()]);
+              
+              // Force another update after a delay to ensure track is fully ready
+              setTimeout(() => {
+                if (!isMounted) return;
+                setParticipants([newRoom.localParticipant, ...newRoom.remoteParticipants.values()]);
+                const updatedVideoPubs = Array.from(newRoom.localParticipant.videoTrackPublications.values());
+                const updatedVideoPub = updatedVideoPubs.find(pub => pub.track);
+                if (updatedVideoPub?.track) {
+                  setIsVideoEnabled(true);
+                  console.log('Video track confirmed ready after delay');
+                }
+              }, 500);
             } else {
               setIsVideoEnabled(false);
             }

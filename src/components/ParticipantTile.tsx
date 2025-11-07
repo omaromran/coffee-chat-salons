@@ -43,18 +43,33 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
       
       if (isLocal) {
         // For local, get ANY track that exists - check all publications
+        // IMPORTANT: For local tracks, we want to show video if ANY track exists, even if muted
         videoPub = videoPubs.find(pub => pub.track);
+        
         // If no track found, try getting the first publication (might have track later)
         if (!videoPub && videoPubs.length > 0) {
           videoPub = videoPubs[0];
         }
+        
         console.log('Local video track search:', {
           foundPub: !!videoPub,
           hasTrack: !!videoPub?.track,
           trackSid: videoPub?.trackSid,
+          isMuted: videoPub?.isMuted,
           trackReady: videoPub?.track?.mediaStreamTrack?.readyState || 'no track',
           mediaStreamTrackReady: videoPub?.track?.mediaStreamTrack?.readyState || 'no mediaStreamTrack',
+          allPubsDetails: videoPubs.map(p => ({
+            hasTrack: !!p.track,
+            isMuted: p.isMuted,
+            trackSid: p.trackSid,
+            source: p.source,
+          })),
         });
+        
+        // Force update if we found a track but videoTrack state is null
+        if (videoPub?.track && !videoTrack) {
+          console.log('FOUND LOCAL VIDEO TRACK BUT STATE WAS NULL - FORCING UPDATE');
+        }
       } else {
         // For remote, prioritize unmuted tracks
         videoPub = videoPubs.find(pub => pub.track && !pub.isMuted);
