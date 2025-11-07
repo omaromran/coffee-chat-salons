@@ -21,39 +21,42 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
       // For remote participants, check subscribed tracks
       const videoPubs = Array.from(participant.videoTrackPublications.values());
       
-      // For local participant, prioritize tracks that are actually published
-      // For remote, prioritize tracks that are subscribed
-      let videoPub = videoPubs.find(pub => {
-        if (isLocal) {
-          // For local, check if track exists and is published
-          return pub.track && pub.trackSid;
-        } else {
-          // For remote, check if track exists and is subscribed
-          return pub.track && !pub.isMuted;
-        }
-      });
+      // For local participant, get any published track (even if muted, we still want to show it)
+      // For remote, prioritize unmuted tracks
+      let videoPub: typeof videoPubs[0] | undefined;
       
-      // Fallback: get any available track
-      if (!videoPub) {
+      if (isLocal) {
+        // For local, get any track that exists - we'll show it even if muted
         videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
+      } else {
+        // For remote, prioritize unmuted tracks
+        videoPub = videoPubs.find(pub => pub.track && !pub.isMuted);
+        if (!videoPub) {
+          videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
+        }
       }
       
       const video = videoPub?.track;
       setVideoTrack(video || null);
-      setIsVideoEnabled(videoPub ? !videoPub.isMuted && video !== null : false);
+      // For local participant, show video if track exists (even if muted)
+      // For remote, only show if not muted
+      if (isLocal) {
+        setIsVideoEnabled(video !== null);
+      } else {
+        setIsVideoEnabled(videoPub ? !videoPub.isMuted && video !== null : false);
+      }
 
       // Audio track handling
       const audioPubs = Array.from(participant.audioTrackPublications.values());
-      let audioPub = audioPubs.find(pub => {
-        if (isLocal) {
-          return pub.track && pub.trackSid;
-        } else {
-          return pub.track && !pub.isMuted;
-        }
-      });
+      let audioPub: typeof audioPubs[0] | undefined;
       
-      if (!audioPub) {
+      if (isLocal) {
         audioPub = audioPubs.find(pub => pub.track) || audioPubs[0];
+      } else {
+        audioPub = audioPubs.find(pub => pub.track && !pub.isMuted);
+        if (!audioPub) {
+          audioPub = audioPubs.find(pub => pub.track) || audioPubs[0];
+        }
       }
       
       const audio = audioPub?.track;
@@ -65,12 +68,13 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         isLocal,
         videoTrack: video ? 'present' : 'missing',
         audioTrack: audio ? 'present' : 'missing',
-        videoEnabled: videoPub ? !videoPub.isMuted : false,
+        videoEnabled: isLocal ? (video !== null) : (videoPub ? !videoPub.isMuted : false),
         audioEnabled: audioPub ? !audioPub.isMuted : false,
         videoMuted: videoPub?.isMuted,
         audioMuted: audioPub?.isMuted,
         videoTrackSid: videoPub?.trackSid,
         videoPubsCount: videoPubs.length,
+        allVideoPubs: videoPubs.map(p => ({ hasTrack: !!p.track, isMuted: p.isMuted, trackSid: p.trackSid })),
       });
     };
 
@@ -159,7 +163,9 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
   return (
     <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
       {/* Video Element */}
-      {isVideoEnabled && videoTrack ? (
+      {/* For local participant, show video if track exists (even if muted state says otherwise) */}
+      {/* For remote, only show if enabled and not muted */}
+      {(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) ? (
         <video
           ref={videoRef}
           autoPlay
