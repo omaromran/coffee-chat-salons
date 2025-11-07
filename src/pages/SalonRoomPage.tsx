@@ -405,10 +405,7 @@ export default function SalonRoomPage() {
             setIsVideoEnabled(isEnabled);
             console.log('Video unmuted, state updated:', isEnabled);
             // Force participants list update to refresh video display
-            setParticipants((prev) => {
-              const updated = [newRoom.localParticipant, ...newRoom.remoteParticipants.values()];
-              return updated;
-            });
+            setParticipants([newRoom.localParticipant, ...newRoom.remoteParticipants.values()]);
           }
         });
 
