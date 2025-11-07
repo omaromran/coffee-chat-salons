@@ -168,18 +168,19 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   return (
     <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-      {/* Video Element */}
-      {/* For local participant, show video if track exists (even if muted state says otherwise) */}
-      {/* For remote, only show if enabled and not muted */}
-      {(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) ? (
+      {/* Video Element - Always render for local participant to ensure it's ready */}
+      {isLocal || videoTrack ? (
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={isLocal}
-          className="w-full h-full object-cover"
+          className={`w-full h-full object-cover ${(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) ? '' : 'hidden'}`}
         />
-      ) : (
+      ) : null}
+      
+      {/* Placeholder when no video */}
+      {!(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) && (
         <div className="w-full h-full flex items-center justify-center bg-gray-700">
           <div className="text-center">
             <div className="w-20 h-20 rounded-full bg-teal/20 flex items-center justify-center mx-auto mb-2">
