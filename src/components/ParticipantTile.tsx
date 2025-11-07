@@ -93,12 +93,29 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   // Attach video track to element - check directly from participant
   useEffect(() => {
+    let attachedTrack: Track | null = null;
+    let isAttached = false;
+    
     // Force check on every render for local participants
     const checkAndAttach = () => {
       const currentVideoTrack = getVideoTrack();
       
+      // Don't re-attach if we already have this track attached
+      if (isAttached && attachedTrack === currentVideoTrack && currentVideoTrack) {
+        return;
+      }
+      
       if (currentVideoTrack && videoRef.current) {
         const videoElement = videoRef.current;
+        
+        // Detach previous track if different
+        if (attachedTrack && attachedTrack !== currentVideoTrack) {
+          try {
+            attachedTrack.detach();
+          } catch (e) {
+            // Ignore
+          }
+        }
         
         console.log('ATTACHING VIDEO:', {
           isLocal,
@@ -135,9 +152,12 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
           currentVideoTrack.attach(videoElement);
         }
 
-        // Force play multiple times
+        attachedTrack = currentVideoTrack;
+        isAttached = true;
+
+        // Force play - but only once, not multiple times
         const play = () => {
-          if (videoElement && videoRef.current === videoElement) {
+          if (videoElement && videoRef.current === videoElement && videoElement.paused) {
             videoElement.play()
               .then(() => {
                 console.log('✅ Video playing successfully');
@@ -148,35 +168,43 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
           }
         };
         
-        // Try playing immediately and with delays
-        play();
-        setTimeout(play, 50);
+        // Try playing with a small delay to ensure element is ready
         setTimeout(play, 100);
-        setTimeout(play, 300);
-        setTimeout(play, 500);
-        setTimeout(play, 1000);
+      } else {
+        // Track removed
+        if (attachedTrack && videoRef.current) {
+          try {
+            attachedTrack.detach();
+          } catch (e) {
+            // Ignore
+          }
+          if (videoRef.current.srcObject) {
+            videoRef.current.srcObject = null;
+          }
+        }
+        attachedTrack = null;
+        isAttached = false;
       }
     };
 
     // Check immediately
     checkAndAttach();
 
-    // For local participants, check periodically to catch track when it becomes available
+    // For local participants, check periodically but less frequently once attached
     let interval: ReturnType<typeof setInterval> | null = null;
     if (isLocal) {
       interval = setInterval(() => {
         checkAndAttach();
-      }, 500);
+      }, 2000); // Reduced to 2 seconds to prevent flickering
     }
 
     return () => {
       if (interval) {
         clearInterval(interval);
       }
-      const currentVideoTrack = getVideoTrack();
-      if (currentVideoTrack && videoRef.current) {
+      if (attachedTrack && videoRef.current) {
         try {
-          currentVideoTrack.detach();
+          attachedTrack.detach();
         } catch (e) {
           // Ignore detach errors
         }
@@ -203,15 +231,6 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
   const currentVideoTrack = getVideoTrack();
   // For local participants, ALWAYS show video element if track exists
   const showVideo = isLocal ? !!currentVideoTrack : (isVideoEnabled && !!videoTrack);
-
-  console.log('RENDER CHECK:', {
-    participant: participant.identity,
-    isLocal,
-    currentVideoTrack: !!currentVideoTrack,
-    videoTrackState: !!videoTrack,
-    isVideoEnabled,
-    showVideo,
-  });
 
   return (
     <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
