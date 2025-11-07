@@ -33,7 +33,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
           trackSid: p.trackSid,
           kind: p.kind,
           source: p.source,
-          trackReady: p.track ? p.track.readyState : 'no track',
+          trackReady: p.track?.mediaStreamTrack?.readyState || 'no track',
         })),
       });
       
@@ -52,7 +52,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
           foundPub: !!videoPub,
           hasTrack: !!videoPub?.track,
           trackSid: videoPub?.trackSid,
-          trackReady: videoPub?.track ? videoPub.track.readyState : 'no track',
+          trackReady: videoPub?.track?.mediaStreamTrack?.readyState || 'no track',
           mediaStreamTrackReady: videoPub?.track?.mediaStreamTrack?.readyState || 'no mediaStreamTrack',
         });
       } else {
@@ -75,7 +75,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         if (video && !hadVideoTrack) {
           console.log('LOCAL VIDEO TRACK DETECTED!', {
             trackSid: video.sid,
-            readyState: video.readyState,
+            readyState: video.mediaStreamTrack?.readyState || 'no mediaStreamTrack',
             hasMediaStreamTrack: !!video.mediaStreamTrack,
           });
         }
