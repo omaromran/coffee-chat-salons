@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 
 export default function SalonListPage() {
   const navigate = useNavigate();
-  const { salons, groups, getGroupById, updateSalon } = useStore();
+  const { salons, groups, getGroupById } = useStore();
 
   // Fetch actual participant counts from LiveKit rooms
   useEffect(() => {

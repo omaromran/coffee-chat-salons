@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Room, RemoteParticipant, LocalParticipant } from 'livekit-client';
 import { useStore } from '../store/useStore';
@@ -12,6 +12,7 @@ export default function SalonRoomPage() {
   const { getSalonById, getGroupById, currentUserId, updateSalon } = useStore();
 
   const [room, setRoom] = useState<Room | null>(null);
+  const roomRef = useRef<Room | null>(null);
   const [participants, setParticipants] = useState<(RemoteParticipant | LocalParticipant)[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false); // Start as false, will be set to true when actually enabled
@@ -83,6 +84,7 @@ export default function SalonRoomPage() {
         console.log('Room state:', newRoom.state);
         
         setRoom(newRoom);
+        roomRef.current = newRoom;
 
         // Set up event listeners
         newRoom.on('participantConnected', (participant) => {
@@ -163,13 +165,10 @@ export default function SalonRoomPage() {
                     if (audioPub.isMuted) {
                       console.log('Microphone track is muted, forcing unmute...');
                       
-                      // Method 1: Use setMuted(false)
-                      audioPub.setMuted(false);
-                      
-                      // Method 2: Re-enable microphone (should unmute)
+                      // Re-enable microphone (should unmute)
                       newRoom.localParticipant.setMicrophoneEnabled(true).catch(console.error);
                       
-                      // Method 3: Enable underlying MediaStreamTrack
+                      // Enable underlying MediaStreamTrack
                       if (audioPub.track.mediaStreamTrack) {
                         audioPub.track.mediaStreamTrack.enabled = true;
                       }
@@ -252,7 +251,7 @@ export default function SalonRoomPage() {
         });
 
         // Listen for local track publications
-        newRoom.on('localTrackPublished', async (publication, participant) => {
+        newRoom.on('localTrackPublished', async (publication) => {
           if (!isMounted) return;
           console.log('Local track published:', publication.kind, publication.trackSid);
           setParticipants([...newRoom.remoteParticipants.values(), newRoom.localParticipant]);
@@ -277,14 +276,10 @@ export default function SalonRoomPage() {
                   // Wait a bit more for track to update
                   await new Promise(resolve => setTimeout(resolve, 100));
                   
-                  // Then explicitly unmute
+                  // Then check again
                   const updatedAudioPubs = Array.from(newRoom.localParticipant.audioTrackPublications.values());
                   const updatedAudioPub = updatedAudioPubs.find(pub => pub.track);
                   if (updatedAudioPub) {
-                    if (updatedAudioPub.isMuted) {
-                      console.log('Explicitly unmuting audio track...');
-                      updatedAudioPub.setMuted(false);
-                    }
                     // Ensure underlying MediaStreamTrack is enabled
                     if (updatedAudioPub.track?.mediaStreamTrack) {
                       updatedAudioPub.track.mediaStreamTrack.enabled = true;
@@ -292,11 +287,11 @@ export default function SalonRoomPage() {
                     
                     // Update state based on actual track state
                     const isEnabled = updatedAudioPub.track && !updatedAudioPub.isMuted;
-                    setIsAudioEnabled(isEnabled);
+                    setIsAudioEnabled(!!isEnabled);
                     console.log('Audio track state after fix:', {
                       hasTrack: !!updatedAudioPub.track,
                       isMuted: updatedAudioPub.isMuted,
-                      enabled: isEnabled
+                      enabled: !!isEnabled
                     });
                   } else {
                     setIsAudioEnabled(false);
@@ -318,7 +313,7 @@ export default function SalonRoomPage() {
           }
         });
 
-        newRoom.on('localTrackUnpublished', (publication, participant) => {
+        newRoom.on('localTrackUnpublished', (publication) => {
           if (!isMounted) return;
           console.log('Local track unpublished:', publication.kind);
           setParticipants([...newRoom.remoteParticipants.values(), newRoom.localParticipant]);
@@ -379,17 +374,19 @@ export default function SalonRoomPage() {
 
     return () => {
       isMounted = false;
-      if (room) {
+      const currentRoom = roomRef.current;
+      if (currentRoom) {
         console.log('Cleaning up room connection');
         // Update participant count before disconnecting
-        if (id && room.state === 'connected') {
-          const remainingCount = room.remoteParticipants.size; // Don't count local participant as they're leaving
+        if (id && currentRoom.state === 'connected') {
+          const remainingCount = currentRoom.remoteParticipants.size;
           updateSalon(id, {
             participantCount: remainingCount,
             lastActivityAt: Date.now(),
           });
         }
-        room.disconnect();
+        currentRoom.disconnect();
+        roomRef.current = null;
       }
     };
   }, [id]); // Only depend on id to prevent re-runs
@@ -418,13 +415,10 @@ export default function SalonRoomPage() {
               if (audioPub.isMuted) {
                 console.log('Unmuting microphone track on toggle...');
                 
-                // Method 1: Use setMuted(false)
-                audioPub.setMuted(false);
-                
-                // Method 2: Re-enable microphone (should unmute)
+                // Re-enable microphone (should unmute)
                 room.localParticipant.setMicrophoneEnabled(true).catch(console.error);
                 
-                // Method 3: Enable underlying MediaStreamTrack
+                // Enable underlying MediaStreamTrack
                 if (audioPub.track.mediaStreamTrack) {
                   audioPub.track.mediaStreamTrack.enabled = true;
                 }
