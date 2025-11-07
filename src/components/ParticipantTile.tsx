@@ -139,52 +139,66 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         hasMediaStreamTrack: !!videoTrack.mediaStreamTrack,
       });
       
-      // For local tracks, ensure we're using the right attachment method
+      // For local tracks, use direct MediaStream attachment
+      // For remote tracks, use LiveKit's attach method
       if (isLocal && videoTrack.mediaStreamTrack) {
-        // Directly set srcObject for local tracks as a fallback
+        // Directly set srcObject for local tracks
         const stream = new MediaStream([videoTrack.mediaStreamTrack]);
         videoElement.srcObject = stream;
         console.log('Set srcObject directly for local track');
-      } else {
-        // Use LiveKit's attach method
-        videoTrack.attach(videoElement);
-      }
-      
-      // Ensure video plays - use a small delay to ensure element is ready
-      const playVideo = () => {
-        if (videoElement && videoRef.current === videoElement) {
-          videoElement.play().catch(err => {
-            console.error('Error playing video:', err);
-          });
-        }
-      };
-      
-      // Try playing immediately
-      playVideo();
-      
-      // Also try after a delay
-      setTimeout(playVideo, 100);
-      setTimeout(playVideo, 500);
-      
-      return () => {
-        // Only detach if this is still the current track and element
-        if (videoTrack && videoRef.current === videoElement) {
-          console.log('Detaching video track:', {
-            participant: participant.identity,
-            isLocal,
-            trackSid: videoTrack.sid,
-          });
-          videoTrack.detach();
-          // Clear srcObject
-          if (videoElement.srcObject) {
-            videoElement.srcObject = null;
+        
+        // Ensure video plays
+        const playVideo = () => {
+          if (videoElement && videoRef.current === videoElement) {
+            videoElement.play().catch(err => {
+              console.error('Error playing local video:', err);
+            });
           }
-        }
-      };
+        };
+        
+        // Try playing immediately and with delays
+        playVideo();
+        setTimeout(playVideo, 100);
+        setTimeout(playVideo, 500);
+        
+        return () => {
+          if (videoRef.current === videoElement) {
+            console.log('Cleaning up local video track');
+            if (videoElement.srcObject) {
+              videoElement.srcObject = null;
+            }
+            // Don't stop the track - LiveKit manages it
+          }
+        };
+      } else {
+        // Use LiveKit's attach method for remote tracks
+        videoTrack.attach(videoElement);
+        
+        // Ensure video plays
+        const playVideo = () => {
+          if (videoElement && videoRef.current === videoElement) {
+            videoElement.play().catch(err => {
+              console.error('Error playing remote video:', err);
+            });
+          }
+        };
+        
+        playVideo();
+        setTimeout(playVideo, 100);
+        
+        return () => {
+          if (videoTrack && videoRef.current === videoElement) {
+            console.log('Detaching remote video track:', {
+              participant: participant.identity,
+              trackSid: videoTrack.sid,
+            });
+            videoTrack.detach();
+          }
+        };
+      }
     } else if (videoRef.current && !videoTrack) {
       // Clean up video element when track is removed
       const videoElement = videoRef.current;
-      // Clear srcObject but don't stop tracks (LiveKit handles that)
       if (videoElement.srcObject) {
         videoElement.srcObject = null;
       }
