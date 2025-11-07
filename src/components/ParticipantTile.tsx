@@ -23,7 +23,9 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
       
       console.log('updateTracks called:', {
         participant: participant.identity,
+        participantName: participant.name,
         isLocal,
+        participantType: participant.constructor.name,
         videoPubsCount: videoPubs.length,
         allPubs: videoPubs.map(p => ({
           hasTrack: !!p.track,
@@ -31,6 +33,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
           trackSid: p.trackSid,
           kind: p.kind,
           source: p.source,
+          trackReady: p.track ? p.track.readyState : 'no track',
         })),
       });
       
@@ -49,6 +52,8 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
           foundPub: !!videoPub,
           hasTrack: !!videoPub?.track,
           trackSid: videoPub?.trackSid,
+          trackReady: videoPub?.track ? videoPub.track.readyState : 'no track',
+          mediaStreamTrackReady: videoPub?.track?.mediaStreamTrack?.readyState || 'no mediaStreamTrack',
         });
       } else {
         // For remote, prioritize unmuted tracks
@@ -59,11 +64,21 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
       }
       
       const video = videoPub?.track;
+      const hadVideoTrack = !!videoTrack;
       setVideoTrack(video || null);
+      
       // For local participant, show video if track exists (even if muted)
       // For remote, only show if not muted
       if (isLocal) {
-        setIsVideoEnabled(video !== null);
+        const newVideoEnabled = video !== null;
+        setIsVideoEnabled(newVideoEnabled);
+        if (video && !hadVideoTrack) {
+          console.log('LOCAL VIDEO TRACK DETECTED!', {
+            trackSid: video.sid,
+            readyState: video.readyState,
+            hasMediaStreamTrack: !!video.mediaStreamTrack,
+          });
+        }
       } else {
         setIsVideoEnabled(videoPub ? !videoPub.isMuted && video !== null : false);
       }
