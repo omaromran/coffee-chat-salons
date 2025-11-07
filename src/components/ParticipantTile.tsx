@@ -79,25 +79,19 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
   useEffect(() => {
     if (videoTrack && videoRef.current) {
       const videoElement = videoRef.current;
-      // Detach any existing track first
-      if (videoElement.srcObject) {
-        const existingTracks = (videoElement.srcObject as MediaStream)?.getVideoTracks();
-        existingTracks?.forEach(track => track.stop());
-      }
-      // Attach the new track
+      // Attach the new track - LiveKit's attach method handles cleanup
       videoTrack.attach(videoElement);
       return () => {
-        // Only detach if this is still the current track
+        // Only detach if this is still the current track and element
         if (videoTrack && videoRef.current === videoElement) {
           videoTrack.detach();
         }
       };
-    } else if (videoRef.current) {
-      // Clean up if track is removed
+    } else if (videoRef.current && !videoTrack) {
+      // Clean up video element when track is removed
       const videoElement = videoRef.current;
+      // Clear srcObject but don't stop tracks (LiveKit handles that)
       if (videoElement.srcObject) {
-        const tracks = (videoElement.srcObject as MediaStream)?.getVideoTracks();
-        tracks?.forEach(track => track.stop());
         videoElement.srcObject = null;
       }
     }
