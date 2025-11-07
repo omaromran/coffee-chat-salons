@@ -139,39 +139,63 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         hasMediaStreamTrack: !!videoTrack.mediaStreamTrack,
       });
       
-      // For local tracks, use direct MediaStream attachment
-      // For remote tracks, use LiveKit's attach method
+      // For local tracks, try both methods - direct MediaStream first, then LiveKit attach
       if (isLocal && videoTrack.mediaStreamTrack) {
+        console.log('Local track detected, attaching via MediaStream');
         // Directly set srcObject for local tracks
-        const stream = new MediaStream([videoTrack.mediaStreamTrack]);
-        videoElement.srcObject = stream;
-        console.log('Set srcObject directly for local track');
+        try {
+          const stream = new MediaStream([videoTrack.mediaStreamTrack]);
+          videoElement.srcObject = stream;
+          console.log('Set srcObject directly for local track, stream tracks:', stream.getTracks().length);
+          
+          // Also try LiveKit's attach as backup
+          try {
+            videoTrack.attach(videoElement);
+            console.log('Also attached via LiveKit attach method');
+          } catch (attachErr) {
+            console.warn('LiveKit attach failed (using direct stream only):', attachErr);
+          }
+        } catch (streamErr) {
+          console.error('Failed to create MediaStream, trying LiveKit attach only:', streamErr);
+          videoTrack.attach(videoElement);
+        }
         
-        // Ensure video plays
+        // Ensure video plays - try multiple times
         const playVideo = () => {
           if (videoElement && videoRef.current === videoElement) {
-            videoElement.play().catch(err => {
-              console.error('Error playing local video:', err);
-            });
+            videoElement.play()
+              .then(() => {
+                console.log('Local video playing successfully');
+              })
+              .catch(err => {
+                console.error('Error playing local video:', err);
+              });
           }
         };
         
         // Try playing immediately and with delays
         playVideo();
         setTimeout(playVideo, 100);
+        setTimeout(playVideo, 300);
         setTimeout(playVideo, 500);
+        setTimeout(playVideo, 1000);
         
         return () => {
           if (videoRef.current === videoElement) {
             console.log('Cleaning up local video track');
+            try {
+              videoTrack.detach();
+            } catch (e) {
+              console.warn('Error detaching track:', e);
+            }
             if (videoElement.srcObject) {
               videoElement.srcObject = null;
             }
-            // Don't stop the track - LiveKit manages it
           }
         };
       } else {
         // Use LiveKit's attach method for remote tracks
+        console.log('Remote track detected, attaching via LiveKit');
         videoTrack.attach(videoElement);
         
         // Ensure video plays
@@ -222,21 +246,31 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
     .toUpperCase()
     .slice(0, 2);
 
+  // Determine if video should be shown
+  const showVideo = isLocal ? !!videoTrack : (isVideoEnabled && !!videoTrack);
+  
+  console.log('ParticipantTile render:', {
+    participant: participant.identity,
+    isLocal,
+    videoTrack: videoTrack ? 'present' : 'missing',
+    isVideoEnabled,
+    showVideo,
+  });
+
   return (
     <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-      {/* Video Element - Always render for local participant */}
+      {/* Video Element - Always render, show/hide based on track availability */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={isLocal}
-        className={`w-full h-full object-cover ${
-          (isLocal ? videoTrack : (isVideoEnabled && videoTrack)) ? '' : 'hidden'
-        }`}
+        className={`w-full h-full object-cover ${showVideo ? 'block' : 'hidden'}`}
+        style={{ display: showVideo ? 'block' : 'none' }}
       />
       
       {/* Placeholder when no video */}
-      {!(isLocal ? videoTrack : (isVideoEnabled && videoTrack)) && (
+      {!showVideo && (
         <div className="w-full h-full flex items-center justify-center bg-gray-700 absolute inset-0">
           <div className="text-center">
             <div className="w-20 h-20 rounded-full bg-teal/20 flex items-center justify-center mx-auto mb-2">
