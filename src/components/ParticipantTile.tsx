@@ -149,7 +149,7 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
     
     // Return void if no cleanup needed
     return undefined;
-  }, [participant, isLocal, getVideoTrack]); // Re-run when participant changes
+  }, [participant, isLocal]); // Re-run when participant changes
 
   useEffect(() => {
     if (audioTrack && audioRef.current) {
