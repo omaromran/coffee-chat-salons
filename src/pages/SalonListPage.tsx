@@ -21,6 +21,15 @@ export default function SalonListPage() {
       // For local dev, it's /api/rooms/participant-counts
       const isFirebase = tokenServerUrl.includes('cloudfunctions.net');
       const endpoint = isFirebase ? '/getParticipantCounts' : '/api/rooms/participant-counts';
+      
+      // Set all salons to 0 initially to prevent showing hardcoded values
+      activeSalons.forEach(salon => {
+        if (salon.participantCount > 0) {
+          useStore.getState().updateSalon(salon.id, {
+            participantCount: 0,
+          });
+        }
+      });
 
       try {
         const response = await fetch(`${tokenServerUrl}${endpoint}`, {

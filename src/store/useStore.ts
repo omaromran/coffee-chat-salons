@@ -32,9 +32,9 @@ const mockUsers: User[] = [
 ];
 
 const mockGroups: Group[] = [
-  { id: 'group1', name: 'Math 201', memberCount: 45 },
+  { id: 'group1', name: 'Vibe Team', memberCount: 45 },
   { id: 'group2', name: 'Weekend Hangout', memberCount: 32 },
-  { id: 'group3', name: 'Design Geeks', memberCount: 28 },
+  { id: 'group3', name: 'Math 201', memberCount: 28 },
   { id: 'group4', name: 'Study Session', memberCount: 15 },
 ];
 
@@ -42,12 +42,12 @@ const mockSalons: Salon[] = [
   {
     id: 'salon1',
     groupId: 'group1',
-    name: 'Math 201',
+    name: 'Vibe Team',
     type: 'video',
     createdAt: Date.now() - 30 * 60 * 1000, // 30 mins ago
     lastActivityAt: Date.now() - 5 * 60 * 1000, // 5 mins ago
     isActive: true,
-    participantCount: 4,
+    participantCount: 0, // Start at 0, will be updated by API
   },
   {
     id: 'salon2',
@@ -57,17 +57,17 @@ const mockSalons: Salon[] = [
     createdAt: Date.now() - 45 * 60 * 1000, // 45 mins ago
     lastActivityAt: Date.now() - 2 * 60 * 1000, // 2 mins ago
     isActive: true,
-    participantCount: 5,
+    participantCount: 0, // Start at 0, will be updated by API
   },
   {
     id: 'salon3',
     groupId: 'group3',
-    name: 'Design Geeks',
+    name: 'Math 201',
     type: 'video',
     createdAt: Date.now() - 20 * 60 * 1000, // 20 mins ago
     lastActivityAt: Date.now() - 1 * 60 * 1000, // 1 min ago
     isActive: true,
-    participantCount: 6,
+    participantCount: 0, // Start at 0, will be updated by API
   },
 ];
 
