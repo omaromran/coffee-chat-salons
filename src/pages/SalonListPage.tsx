@@ -148,10 +148,10 @@ export default function SalonListPage() {
         </div>
       </div>
 
-      {/* Chat List */}
-      <div className="border-t border-gray-100">
-        <div className="px-4 py-2">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Chats</h2>
+            {/* Chat List */}
+            <div className="border-t border-gray-100">
+              <div className="px-4 py-2">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">My Communities</h2>
           
           <div className="space-y-1">
             {salons.filter((s) => s.isActive).map((salon) => {
