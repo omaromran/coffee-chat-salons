@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: coffee-chat-salons-backend
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: PORT
+        value: "3001"
+
