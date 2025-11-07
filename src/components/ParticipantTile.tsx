@@ -17,16 +17,24 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   useEffect(() => {
     const updateTracks = () => {
-      // Get video track - check both published and subscribed tracks
+      // Get video track - check subscribed tracks first (for remote participants)
+      // then published tracks (for local participant)
       const videoPubs = Array.from(participant.videoTrackPublications.values());
-      const videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
+      let videoPub = videoPubs.find(pub => pub.track && !pub.isMuted);
+      if (!videoPub) {
+        videoPub = videoPubs.find(pub => pub.track) || videoPubs[0];
+      }
       const video = videoPub?.track;
       setVideoTrack(video || null);
       setIsVideoEnabled(videoPub ? !videoPub.isMuted && video !== null : false);
 
-      // Get audio track - check both published and subscribed tracks
+      // Get audio track - check subscribed tracks first (for remote participants)
+      // then published tracks (for local participant)
       const audioPubs = Array.from(participant.audioTrackPublications.values());
-      const audioPub = audioPubs.find(pub => pub.track) || audioPubs[0];
+      let audioPub = audioPubs.find(pub => pub.track && !pub.isMuted);
+      if (!audioPub) {
+        audioPub = audioPubs.find(pub => pub.track) || audioPubs[0];
+      }
       const audio = audioPub?.track;
       setAudioTrack(audio || null);
       setIsAudioEnabled(audioPub ? !audioPub.isMuted && audio !== null : false);
@@ -35,8 +43,10 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         participant: participant.identity,
         videoTrack: video ? 'present' : 'missing',
         audioTrack: audio ? 'present' : 'missing',
-        videoEnabled: !videoPub?.isMuted,
-        audioEnabled: !audioPub?.isMuted,
+        videoEnabled: videoPub ? !videoPub.isMuted : false,
+        audioEnabled: audioPub ? !audioPub.isMuted : false,
+        videoMuted: videoPub?.isMuted,
+        audioMuted: audioPub?.isMuted,
       });
     };
 
@@ -68,10 +78,28 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
 
   useEffect(() => {
     if (videoTrack && videoRef.current) {
-      videoTrack.attach(videoRef.current);
+      const videoElement = videoRef.current;
+      // Detach any existing track first
+      if (videoElement.srcObject) {
+        const existingTracks = (videoElement.srcObject as MediaStream)?.getVideoTracks();
+        existingTracks?.forEach(track => track.stop());
+      }
+      // Attach the new track
+      videoTrack.attach(videoElement);
       return () => {
-        videoTrack.detach();
+        // Only detach if this is still the current track
+        if (videoTrack && videoRef.current === videoElement) {
+          videoTrack.detach();
+        }
       };
+    } else if (videoRef.current) {
+      // Clean up if track is removed
+      const videoElement = videoRef.current;
+      if (videoElement.srcObject) {
+        const tracks = (videoElement.srcObject as MediaStream)?.getVideoTracks();
+        tracks?.forEach(track => track.stop());
+        videoElement.srcObject = null;
+      }
     }
   }, [videoTrack]);
 

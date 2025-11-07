@@ -110,13 +110,31 @@ export default function SalonRoomPage() {
         newRoom.on('trackSubscribed', (track, _publication, participant) => {
           if (!isMounted) return;
           console.log('Track subscribed:', track.kind, participant.identity);
-          setParticipants([...newRoom.remoteParticipants.values(), newRoom.localParticipant]);
+          // Update participants list without recreating the array unnecessarily
+          setParticipants((prev) => {
+            const updated = [...newRoom.remoteParticipants.values(), newRoom.localParticipant];
+            // Only update if the list actually changed
+            if (updated.length !== prev.length || 
+                updated.some((p, i) => p !== prev[i])) {
+              return updated;
+            }
+            return prev;
+          });
         });
 
         newRoom.on('trackUnsubscribed', (track, _publication, participant) => {
           if (!isMounted) return;
           console.log('Track unsubscribed:', track.kind, participant.identity);
-          setParticipants([...newRoom.remoteParticipants.values(), newRoom.localParticipant]);
+          // Update participants list without recreating the array unnecessarily
+          setParticipants((prev) => {
+            const updated = [...newRoom.remoteParticipants.values(), newRoom.localParticipant];
+            // Only update if the list actually changed
+            if (updated.length !== prev.length || 
+                updated.some((p, i) => p !== prev[i])) {
+              return updated;
+            }
+            return prev;
+          });
         });
 
         newRoom.on('disconnected', () => {
@@ -254,7 +272,14 @@ export default function SalonRoomPage() {
         newRoom.on('localTrackPublished', async (publication) => {
           if (!isMounted) return;
           console.log('Local track published:', publication.kind, publication.trackSid);
-          setParticipants([...newRoom.remoteParticipants.values(), newRoom.localParticipant]);
+          // Update participants list without recreating unnecessarily
+          setParticipants((prev) => {
+            const updated = [newRoom.localParticipant, ...newRoom.remoteParticipants.values()];
+            if (updated.length !== prev.length || updated.some((p, i) => p !== prev[i])) {
+              return updated;
+            }
+            return prev;
+          });
           
           // Sync UI state with actual track state
           if (publication.kind === 'audio') {
@@ -316,7 +341,14 @@ export default function SalonRoomPage() {
         newRoom.on('localTrackUnpublished', (publication) => {
           if (!isMounted) return;
           console.log('Local track unpublished:', publication.kind);
-          setParticipants([...newRoom.remoteParticipants.values(), newRoom.localParticipant]);
+          // Update participants list without recreating unnecessarily
+          setParticipants((prev) => {
+            const updated = [newRoom.localParticipant, ...newRoom.remoteParticipants.values()];
+            if (updated.length !== prev.length || updated.some((p, i) => p !== prev[i])) {
+              return updated;
+            }
+            return prev;
+          });
           
           // Sync UI state with actual track state
           if (publication.kind === 'audio') {
