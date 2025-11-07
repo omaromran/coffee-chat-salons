@@ -135,19 +135,36 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
         elementReady: !!videoElement,
         trackKind: videoTrack.kind,
         trackSource: videoTrack.source,
+        trackClass: videoTrack.constructor.name,
+        hasMediaStreamTrack: !!videoTrack.mediaStreamTrack,
       });
       
-      // Attach the new track - LiveKit's attach method handles cleanup
-      videoTrack.attach(videoElement);
+      // For local tracks, ensure we're using the right attachment method
+      if (isLocal && videoTrack.mediaStreamTrack) {
+        // Directly set srcObject for local tracks as a fallback
+        const stream = new MediaStream([videoTrack.mediaStreamTrack]);
+        videoElement.srcObject = stream;
+        console.log('Set srcObject directly for local track');
+      } else {
+        // Use LiveKit's attach method
+        videoTrack.attach(videoElement);
+      }
       
       // Ensure video plays - use a small delay to ensure element is ready
-      setTimeout(() => {
+      const playVideo = () => {
         if (videoElement && videoRef.current === videoElement) {
           videoElement.play().catch(err => {
             console.error('Error playing video:', err);
           });
         }
-      }, 100);
+      };
+      
+      // Try playing immediately
+      playVideo();
+      
+      // Also try after a delay
+      setTimeout(playVideo, 100);
+      setTimeout(playVideo, 500);
       
       return () => {
         // Only detach if this is still the current track and element
@@ -158,6 +175,10 @@ export default function ParticipantTile({ participant, isLocal }: ParticipantTil
             trackSid: videoTrack.sid,
           });
           videoTrack.detach();
+          // Clear srcObject
+          if (videoElement.srcObject) {
+            videoElement.srcObject = null;
+          }
         }
       };
     } else if (videoRef.current && !videoTrack) {
